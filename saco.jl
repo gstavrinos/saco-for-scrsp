@@ -61,18 +61,18 @@ function conflict(s1, s2)
 end
 
 function feasible(c, s, e)
-    return c.start_time >= s && c.start_time <= e
+    return c.start_time <= e
 end
 
 function generateRandomDataset()
     # Create our visible arc
     va = VisibleArc(Vector{Satellite}(), Vector{Antenna}(), τmin, τmax, [])
-    # Random number of satellites in [10,20]
-    nsatellites = rand(10:1:20)
-    # Random number of antennas in [5,12]
-    nantennas = rand(5:1:12)
+    # Random number of satellites in [10,17]
+    nsatellites = rand(10:1:17)
+    # Random number of antennas in [5,13]
+    nantennas = rand(5:1:13)
     while nantennas >= nsatellites
-        nantennas = rand(5:1:12)
+        nantennas = rand(5:1:13)
     end
     # Add random satellites throughout the visible arc
     for i in 1:nsatellites
@@ -98,61 +98,6 @@ function generateRandomDataset()
     return va
 end
 
-# Generate all antenna-satellite pairs first
-# (No triplets or more for now)
-# function generateFeasiblePairs!(result, antennas, satellites, s, e)
-#     for antenna in antennas
-#         if feasible(antenna, s, e)
-#             for sat in satellites
-#                 if canConnect(antenna, sat)
-#                     push!(result, VisibleArc([sat], [antenna], max(antenna.start_time, sat.start_time), min(antenna.end_time, sat.end_time), 0))
-#                 end
-#             end
-#         end
-#     end
-# end
-
-# TODO
-# function checkForMoreCombinations!(result, antennas, satellites, s, e)
-#     found = false
-#     for sat in satellites
-#         for va in result
-#             for antenna in va.antenna
-#                 if canConnect(antenna, sat)
-#                     conf = false
-#                     for s in va.satellite
-#                         if conflict(sat,s)
-#                             conf = true
-#                             break
-#                         end
-#                         if !conf
-#                             found = true
-#                             push!(va.satellite, sat)
-#                         end
-#                     end
-#                 end
-#             end
-#         end
-#     end
-#     return found
-# end
-
-# A not-optimized-at-all combinations search
-# function combinations(antennas, satellites, working_lengths)
-#     result = Vector{VisibleArc}()
-#     end_times = working_lengths .+ (τmax/length(working_lengths) - stp)
-#     for t=1:length(working_lengths)
-#         s = working_lengths[t]
-#         e = end_times[t]
-#         generateFeasiblePairs!(result, antennas, satellites, s, e)
-#         work = true
-#         while work
-#             work = checkForMoreCombinations!(result, antennas, satellites, s, e)
-#         end
-#     end
-#     return result
-# end
-
 function validCombination(c, s, e)
     for a in c.antenna
         # Check if this antenna is
@@ -166,11 +111,6 @@ function validCombination(c, s, e)
             if !feasible(sat, s, e)
                 return false
             end
-            # Check if this antenna can connect
-            # to this satellite
-            # if !canConnect(a, sat)
-            #     return false
-            # end
             for sat2 in c.satellite
                 # Check if this satellite is in
                 # conflict with another satellite
@@ -179,8 +119,6 @@ function validCombination(c, s, e)
                 end
             end
         end
-        # TODO not sure how to handle this kind of conflicts
-        # Same for sats
         for a2 in c.antenna
             # Check if this antenna is in
             # conflict with another antenna
@@ -216,7 +154,7 @@ function fixCombination!(v, working_lengths)
     η!(v, working_lengths)
 end
 
-function legalCombinations(antennas, satellites, working_lengths)
+function feasibleCombinations(antennas, satellites, working_lengths)
     lc = Vector{VisibleArc}()
     end_times = working_lengths .+ (τmax/length(working_lengths) - stp)
     antenna_combs = collect(combinations(antennas))
@@ -240,40 +178,6 @@ function legalCombinations(antennas, satellites, working_lengths)
 
     return lc
 end
-
-# function candicatesPerWorkingLength(visible_arc, working_lengths)
-#     candidates = Vector{VisibleArc}()
-#     end_times = working_lengths .+ (τmax/length(working_lengths) - stp)
-#     for t=1:length(working_lengths)
-#         current_wl = Vector{VisibleArc}()
-
-#         # Associate antennas with all feasible sat combinations
-#         for a in visible_arc.antenna
-#             va = VisibleArc([], [], 0, 0, [])
-#             if feasible(a, working_lengths[t], end_times[t])
-#                 push!(va.antenna, a)
-#                 for i=1:length(visible_arc.satellite)
-#                     if canConnect(a, visible_arc.satellite[i])
-#                         push!(va.antenna, visible_arc.satellite[i])
-#                     else
-
-#                     end
-#                 end
-#             else # Antennas are sorted by start_time
-#                 break
-#             end
-#         end
-#         # for i = 1:length(visible_arc.satellite)
-#         #     if visible_arc.satellite[i].start_time >= working_lengths[t]
-#         #         push!(va.satellite, visible_arc.satellite[i])
-#         #     else # Satellites are sorted
-#         #         break
-#         #     end
-#         # end
-#         push!(candidates, va)
-#     end
-#     return candidates
-# end
 
 function initAnts(nants, visible_arcs)
     ants = Vector{Ant}()
@@ -322,7 +226,7 @@ function score!(ants, working_lengths)
     end
 end
 
-function saco(candicates, working_lengths)
+function saco(candidates, working_lengths)
     # Paper step 1
     ants = initAnts(nants, candidates)
     update!(ants)
@@ -341,10 +245,14 @@ end
 function main()
     l = 20 # working periods
     working_lengths = Array(τmin:τmax/l:τmax)
+    println("Generating random dataset...")
     visible_arc = generateRandomDataset()
-    candidates = legalCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
-    println(candidates)
-    println(length(candidates))
+    println("Number of antennas = " * string(length(visible_arc.antenna)))
+    println("Number of satellites = " * string(length(visible_arc.satellite)))
+    println("Generating candidate combinations...")
+    candidates = feasibleCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
+    println("Generated " * string(length(candidates)) * " candidate combinations.")
+    println("Now starting the SACO algorithm...")
     # TODO
     # Visualize the visible arc here
     # solution = saco(candidates, working_lengths)
@@ -352,4 +260,4 @@ function main()
     # Visualize the solution here
 end
 
-main()
+@time main()
