@@ -1,5 +1,6 @@
 #!/bin/env julia
 using Random
+using StatsBase
 using Combinatorics
 
 import Base: isless
@@ -39,6 +40,7 @@ mutable struct Ant
     pheromone_value
     solution
     fitness
+    pool
 end
 
 isless(s1::Satellite, s2::Satellite) = isless(s1.start_time, s2.start_time)
@@ -54,6 +56,10 @@ end
 
 function canConnect(a::Antenna, s::Satellite)
     return a.start_time <= s.end_time && s.start_time <= a.end_time
+end
+
+function feasible(c, s, e)
+    return c.start_time < e && c.end_time > s
 end
 
 function generateRandomDataset()
@@ -155,7 +161,7 @@ end
 function initAnts(nants, visible_arcs)
     ants = Vector{Ant}()
     for n=1:nants
-        tmpant = Ant(ω*τmax, Vector{VisibleArc}(), 0)
+        tmpant = Ant(ω*τmax, Vector{VisibleArc}(), 0, visible_arcs)
         for va in visible_arcs
             tmpva = VisibleArc(Vector{Satellite}(), Vector{Antenna}(), 0, 0, [])
             # How many (and which) satellites are we
@@ -199,6 +205,34 @@ function score!(ants, working_lengths)
     end
 end
 
+function constructSolution!(ant, working_lengths, ants)
+    end_times = working_lengths .+ (τmax/length(working_lengths) - stp)
+    probs = Vector{Float64}()
+    ant.solution = Vector{VisibleArc}()
+    for l=1:length(working_lengths)
+        for ai in ant.pool
+            if feasible(ai, working_lengths[l], end_times[l])
+                pd = 0
+                for a in ants
+                    if a != ant
+                        for tmpai in a.pool
+                            if feasible(tmpai, working_lengths[l], end_times[l])
+                                pd += a.pheromone_value*a.fitness^β
+                            end
+                        end
+                    end
+                end
+                push!(probs, ant.pheromone_value*ant.fitness^β/pd)
+            else
+                push!(probs, .0)
+            end
+        end
+        push!(ant.solution, sample(ant.pool, Weights(probs)))
+        # TODO remove from pool
+        #remove = ant.sloution
+    end
+end
+
 function saco(candidates, working_lengths)
     # Paper step 1
     ants = initAnts(nants, candidates)
@@ -209,7 +243,9 @@ function saco(candidates, working_lengths)
     while iteration <= Nmax
         # Paper step 3
         for i = 1:length(ants)
-            ants[i].solution = constructSolution(ants[i])
+            # Step 4
+            constructSolution!(ants[i], working_lengths, ants)
+            
         end
         iteration += 1
     end
@@ -228,7 +264,7 @@ function main()
     println("Now starting the SACO algorithm...")
     # TODO
     # Visualize the visible arc here
-    # solution = saco(candidates, working_lengths)
+    solution = saco(candidates, working_lengths)
     # TODO
     # Visualize the solution here
 end
