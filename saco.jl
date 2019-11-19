@@ -56,14 +56,6 @@ function canConnect(a::Antenna, s::Satellite)
     return a.start_time <= s.end_time && s.start_time <= a.end_time
 end
 
-function conflict(s1, s2)
-    return s2.start_time <= s1.end_time && s1.start_time <= s2.end_time
-end
-
-function feasible(c, s, e)
-    return c.start_time <= e
-end
-
 function generateRandomDataset()
     # Create our visible arc
     va = VisibleArc(Vector{Satellite}(), Vector{Antenna}(), τmin, τmax, [])
@@ -98,31 +90,12 @@ function generateRandomDataset()
     return va
 end
 
-function validCombination(c, s, e)
+function validCombination(c)
     for a in c.antenna
         # Check if this antenna is
         # outside of this working period
-        if !feasible(a, s, e)
-            return false
-        end
         for sat in c.satellite
-            # Check if this satellite is
-            # outside of this working period
-            if !feasible(sat, s, e)
-                return false
-            end
-            for sat2 in c.satellite
-                # Check if this satellite is in
-                # conflict with another satellite
-                if sat != sat2 && conflict(sat, sat2)
-                    return false
-                end
-            end
-        end
-        for a2 in c.antenna
-            # Check if this antenna is in
-            # conflict with another antenna
-            if a != a2 && conflict(a, a2)
+            if !canConnect(a, sat)
                 return false
             end
         end
@@ -156,24 +129,24 @@ end
 
 function feasibleCombinations(antennas, satellites, working_lengths)
     lc = Vector{VisibleArc}()
-    end_times = working_lengths .+ (τmax/length(working_lengths) - stp)
     antenna_combs = collect(combinations(antennas))
     satellite_combs = collect(combinations(satellites))
-    total = length(working_lengths) * length(antenna_combs) * length(satellite_combs)
+    total = length(antenna_combs) * length(satellite_combs)
     progress = 0
-    inc = length(antenna_combs) * length(satellite_combs)
-    for t=1:length(working_lengths)
-        println("Progress = " * string(progress/total*100) * "%")
-        for a in antenna_combs
-            for s in satellite_combs
-                tmpv = VisibleArc(s, a, 0, 0, [])
-                if validCombination(tmpv, working_lengths[t], end_times[t])
-                    fixCombination!(tmpv, working_lengths)
-                    push!(lc, tmpv)
-                end
+    prints_left = ceil(0.05*length(antenna_combs))
+    for a in antenna_combs
+        for s in satellite_combs
+            tmpv = VisibleArc(s, a, 0, 0, [])
+            if validCombination(tmpv)
+                fixCombination!(tmpv, working_lengths)
+                push!(lc, tmpv)
             end
         end
-        progress += inc
+        progress += length(satellite_combs)
+        prints_left -= 1
+        if prints_left % 10 == 0
+            println("Progress = " * string(progress/total*100) * "%")
+        end
     end
 
     return lc
