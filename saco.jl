@@ -162,6 +162,7 @@ function initAnts(nants, visible_arcs)
     ants = Vector{Ant}()
     for n=1:nants
         tmpant = Ant(ω*τmax, Vector{VisibleArc}(), 0, visible_arcs)
+        # TODO optimize here
         for va in visible_arcs
             tmpva = VisibleArc(Vector{Satellite}(), Vector{Antenna}(), 0, 0, [])
             # How many (and which) satellites are we
@@ -175,7 +176,7 @@ function initAnts(nants, visible_arcs)
             antns = va.antenna[antns_idx]
             append!(tmpva.antenna, antns)
 
-            push!(tmpant.solution, tmpva)
+            push!(tmpant.pool, tmpva)
         end
         push!(ants, tmpant)
     end
@@ -228,9 +229,10 @@ function constructSolution!(ant, working_lengths, ants)
             end
         end
         push!(ant.solution, sample(ant.pool, Weights(probs)))
-        # TODO remove from pool
-        #remove = ant.sloution
+        deleteat!(ant.pool, findall(in(ant.solution[end].antenna), ant.pool[:].antenna))
+        println(length(ant.pool))
     end
+    asd
 end
 
 function saco(candidates, working_lengths)
