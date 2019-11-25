@@ -1,6 +1,7 @@
 #!/bin/env julia
 using Random
 using StatsBase
+using ProgressMeter
 using Combinatorics
 
 import Base: isless
@@ -40,8 +41,13 @@ mutable struct Ant
     pheromone_value
     solution
     fitness
-    pool
+    index_pool
 end
+
+# Store all candidates here
+# because my PC can't handle
+# adding them to each ant
+candidates = Vector{VisibleArc}()
 
 isless(s1::Satellite, s2::Satellite) = isless(s1.start_time, s2.start_time)
 isless(a1::Antenna, a2::Antenna) = isless(a1.start_time, a2.start_time)
@@ -138,9 +144,7 @@ function feasibleCombinations(antennas, satellites, working_lengths)
     antenna_combs = collect(combinations(antennas))
     satellite_combs = collect(combinations(satellites))
     total = length(antenna_combs) * length(satellite_combs)
-    progress = 0
-    prints_left = ceil(0.05*length(antenna_combs))
-    for a in antenna_combs
+    @showprogress 0.1 "Generating candidate combinations..." for a in antenna_combs
         for s in satellite_combs
             tmpv = VisibleArc(s, a, 0, 0, [])
             if validCombination(tmpv)
@@ -148,39 +152,19 @@ function feasibleCombinations(antennas, satellites, working_lengths)
                 push!(lc, tmpv)
             end
         end
-        progress += length(satellite_combs)
-        prints_left -= 1
-        if prints_left % 10 == 0
-            println("Progress = " * string(progress/total*100) * "%")
-        end
     end
 
     return lc
 end
 
-function initAnts(nants, visible_arcs)
-    ants = Vector{Ant}()
-    for n=1:nants
-        tmpant = Ant(ω*τmax, Vector{VisibleArc}(), 0, visible_arcs)
-        # TODO optimize here
-        for va in visible_arcs
-            tmpva = VisibleArc(Vector{Satellite}(), Vector{Antenna}(), 0, 0, [])
-            # How many (and which) satellites are we
-            # going to use for this working period?
-            sat_idx = sort(randperm(rand(0:1:length(va.satellite))))
-            sats = va.satellite[sat_idx]
-            append!(tmpva.satellite, sats)
-            # How many (and which) antennas are we
-            # going to use for this working period?
-            antns_idx = sort(randperm(rand(0:1:length(va.antenna))))
-            antns = va.antenna[antns_idx]
-            append!(tmpva.antenna, antns)
-
-            push!(tmpant.pool, tmpva)
-        end
-        push!(ants, tmpant)
-    end
-    return ants
+function initAnts(nants)
+    # ants = Vector{Ant}()
+    return fill(Ant(ω*τmax, Vector{VisibleArc}(), 0, collect(1:length(candidates))), nants)
+    # for n=1:nants
+    #     tmpant = Ant(ω*τmax, Vector{VisibleArc}(), 0, collect(1:length(candidates)))
+    #     push!(ants, tmpant)
+    # end
+    # return ants
 end
 
 function η!(visible_arc, working_lengths)
@@ -196,8 +180,31 @@ function η!(visible_arc, working_lengths)
     end
 end
 
-function update!(ants)
+function f(solution::Vector{VisibleArc})
+    s = 0
+    for i=1:length(solution)
+        s += solution[i].heuristic[i]
+    end
+    return s
+end
 
+function f!(ant)
+    s = 0
+    for i=1:length(ant.solution)
+        s += ant.solution[i].heuristic[i]
+    end
+    ant.fitness = s
+    return s
+end
+
+function update!(ants, curr_best)
+    for ant in ants
+        ant.pheromone_value *= (1-ρ)
+        if ant.solution == curr_best
+            ant.pheromone_value += ρ*τmax
+        end
+        ant.pheromone_value = min(max(ant.pheromone_value, τmin), τmax)
+    end
 end
 
 function score!(ants, working_lengths)
@@ -211,13 +218,13 @@ function constructSolution!(ant, working_lengths, ants)
     probs = Vector{Float64}()
     ant.solution = Vector{VisibleArc}()
     for l=1:length(working_lengths)
-        for ai in ant.pool
-            if feasible(ai, working_lengths[l], end_times[l])
+        for ai in ant.index_pool
+            if feasible(candidates[ai], working_lengths[l], end_times[l])
                 pd = 0
                 for a in ants
                     if a != ant
-                        for tmpai in a.pool
-                            if feasible(tmpai, working_lengths[l], end_times[l])
+                        for tmpai in a.index_pool
+                            if feasible(candidates[tmpai], working_lengths[l], end_times[l])
                                 pd += a.pheromone_value*a.fitness^β
                             end
                         end
@@ -228,29 +235,52 @@ function constructSolution!(ant, working_lengths, ants)
                 push!(probs, .0)
             end
         end
-        push!(ant.solution, sample(ant.pool, Weights(probs)))
-        deleteat!(ant.pool, findall(in(ant.solution[end].antenna), ant.pool[:].antenna))
-        println(length(ant.pool))
+        push!(ant.solution, candidates[sample(ant.index_pool, Weights(probs))])
+        delete_indices = []
+        # for a in ant.solution[end].antenna
+        #     for i=1:length(ant.index_pool)
+        #         for a_p in candidates[ant.index_pool[i]].antenna
+        #             if a == a_p
+        #                 push!(delete_indices, i)
+        #                 break
+        #             end
+        #         end
+        #     end
+        # end
+        #deleteat!(ant.pool, findall(in(ant.solution[end].antenna), ant.pool[:].antenna))
+        #deleteat!(ant.index_pool, delete_indices)
+        #println(length(ant.index_pool))
     end
-    asd
 end
 
 function saco(candidates, working_lengths)
     # Paper step 1
-    ants = initAnts(nants, candidates)
-    update!(ants)
-    score!(ants, working_lengths)
-    iteration = 0
+    ants = initAnts(nants)
+    solution = Vector{VisibleArc}()
+    curr_best = Vector{VisibleArc}()
+    # update!(ants, curr_best)
+    # score!(ants, working_lengths)
     # Paper step 2
-    while iteration <= Nmax
+    @showprogress 0.1  "Running the SACO algorithm..." for iteration=1:Nmax
         # Paper step 3
         for i = 1:length(ants)
-            # Step 4
+            # Paper step 4
             constructSolution!(ants[i], working_lengths, ants)
-            
+            # Paper step 6
+            if isempty(curr_best) || f(curr_best) > f!(ants[i])
+                curr_best = ants[i].solution
+            end
         end
+        # Paper step 7
+        if isempty(solution) || f(solution) > f(curr_best)
+            # Paper step 8
+            solution = curr_best
+        end
+        # Paper step 10
+        update!(ants, curr_best)
         iteration += 1
     end
+    return solution, f(solution)
 end
 
 function main()
@@ -260,13 +290,12 @@ function main()
     visible_arc = generateRandomDataset()
     println("Number of antennas = " * string(length(visible_arc.antenna)))
     println("Number of satellites = " * string(length(visible_arc.satellite)))
-    println("Generating candidate combinations...")
-    candidates = feasibleCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
+    global candidates = feasibleCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
     println("Generated " * string(length(candidates)) * " candidate combinations.")
-    println("Now starting the SACO algorithm...")
     # TODO
     # Visualize the visible arc here
-    solution = saco(candidates, working_lengths)
+    solution, fitness = saco(candidates, working_lengths)
+    println(solution)
     # TODO
     # Visualize the solution here
 end
