@@ -368,15 +368,15 @@ end
 
 # Helper function to load 3D models
 function getModels()
-    sat = load(string(@__DIR__)*"/satellite.obj", GLNormalUVMesh)
-    antenna = load(string(@__DIR__)*"/antenna.obj", GLNormalUVMesh)
+    sat = load(string(@__DIR__)*"/res/satellite.obj", GLNormalUVMesh)
+    antenna = load(string(@__DIR__)*"/res/antenna.obj", GLNormalUVMesh)
     return sat, antenna
 end
 
 # Helper function to load a scene with Earth inside it
 function blueMarble♥()
     scene = Scene(resolution = (500, 500), backgroundcolor = :black, center=false)
-    earth = load(string(@__DIR__)*"/bluemarble-2048.png")
+    earth = load(string(@__DIR__)*"/res/bluemarble-2048.png")
     m = GLNormalUVMesh(Sphere(Point3f0(0), 1f0), 60)
     mesh!(scene, m, color = earth, shading = true, show_axis = false)
     return scene
