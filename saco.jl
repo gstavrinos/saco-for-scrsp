@@ -1,10 +1,21 @@
 #!/bin/env julia
+# Algorithm imports
 using Random
 using StatsBase
 using ProgressMeter
 using Combinatorics
-
 import Base: isless
+
+# Visualization imports
+using Makie
+using FileIO
+using MeshIO
+using Colors
+using GeometryTypes
+
+
+# Algorithm code
+# ------------------
 
 # SACO contants based on
 # the results of the paper
@@ -158,13 +169,7 @@ function feasibleCombinations(antennas, satellites, working_lengths)
 end
 
 function initAnts(nants)
-    # ants = Vector{Ant}()
     return fill(Ant(ω*τmax, Vector{VisibleArc}(), 0, collect(1:length(candidates))), nants)
-    # for n=1:nants
-    #     tmpant = Ant(ω*τmax, Vector{VisibleArc}(), 0, collect(1:length(candidates)))
-    #     push!(ants, tmpant)
-    # end
-    # return ants
 end
 
 function η!(visible_arc, working_lengths)
@@ -283,6 +288,100 @@ function saco(candidates, working_lengths)
     return solution, f(solution)
 end
 
+# ------------------
+
+
+# Visualization code
+# ------------------
+
+# Helper function to add the antennas on the globe
+function placeAntennas!(scene, antennas, a)
+    antenna_pos = getAntennaPositions()
+    ΔΤmax = τmax-τmin
+    nantennas = length(antennas)
+    antp = Vector{Point{3,Float32}}()
+    # TODO add length arrows
+    for antenna in antennas
+        # Go from [τmin,τmax] to [1,360]
+        # which is the range of the earth mesh slices
+        p = ceil(Int, 359/ΔΤmax*((antenna.end_time+antenna.start_time)/2-τmin)+1)
+        push!(antp, antenna_pos[p])
+    end
+    ant_colours = [RGBAf0(rand(), rand(), rand(), 1.0) for i = 1:nantennas]
+    ant_sizes = [(0.01,0.01,0.01) for i = 1:nantennas]
+    ant_rot = [Vec4f0([0,0,-0.7,0.7]) for i = 1:nantennas]
+    scene = meshscatter!(antp, color = ant_colours, markersize = ant_sizes, marker=a, rotation=ant_rot)
+end
+
+# Helper function to add the satellites over the globe
+function placeSatellites!(scene, satellites, s)
+    satellite_pos = getSatellitePositions()
+    ΔΤmax = τmax-τmin
+    nsats = length(satellites)
+    satp = Vector{Point{3,Float32}}()
+    # TODO add length arrows
+    for satellite in satellites
+        p = ceil(Int, 359/ΔΤmax*((satellite.end_time+satellite.start_time)/2-τmin)+1)
+        push!(satp, satellite_pos[p])
+        println(p)
+    end
+    sat_colours = [RGBAf0(rand(), rand(), rand(), 1.0) for i = 1:nsats]
+    sat_sizes = [(0.2,0.2,0.2) for i = 1:nsats]
+    scene = meshscatter!(satp, color = sat_colours, markersize = sat_sizes, marker=s)
+end
+
+# Helper function to generate possible antenna positions
+function getAntennaPositions()
+    return decompose(Point3f0, GLNormalUVMesh(Sphere(Point3f0(0), 1.05f0), 360))
+end
+
+# Helper function to generate possible antenna positions
+function getSatellitePositions()
+    return decompose(Point3f0, GLNormalUVMesh(Sphere(Point3f0(0), 1.5f0), 360))
+end
+
+# Helper function to load 3D models
+function getModels()
+    sat = load(string(@__DIR__)*"/satellite.obj", GLNormalUVMesh)
+    antenna = load(string(@__DIR__)*"/antenna.obj", GLNormalUVMesh)
+    return sat, antenna
+end
+
+# Helper function to load a scene with Earth inside it
+function blueMarble♥()
+    scene = Scene(resolution = (500, 500), backgroundcolor = :black, center=false)
+    earth = load(string(@__DIR__)*"/bluemarble-2048.png")
+    m = GLNormalUVMesh(Sphere(Point3f0(0), 1f0), 60)
+    mesh!(scene, m, color = earth, shading = true, show_axis = false)
+    return scene
+end
+
+# Helper function to add stars to the scene
+function myGodItsFullOfStars!(scene)
+    stars = 100_000
+    scatter!(scene, (rand(Point3f0, stars) .- 0.5) .* 10,
+        glowwidth = 0.005, glow_color = :white, color = RGBA(0.8, 0.9, 0.95, 0.4),
+        markersize = rand(range(0.0001, stop=0.01, length=100), stars))
+end
+
+# Function to visualize the generated problem
+function viz(v::VisibleArc)
+    scene = blueMarble♥()
+    myGodItsFullOfStars!(scene)
+    sat, ant = getModels()
+    placeAntennas!(scene, v.antenna, ant)
+    placeSatellites!(scene, v.satellite, sat)
+    display(scene)
+    return scene
+end
+
+# Function to visualize the generated solution
+function viz(v::VisibleArc, s::Vector{VisibleArc})
+    scene = viz(v)
+end
+
+# ------------------
+
 function main()
     l = 20 # working periods
     working_lengths = Array(τmin:τmax/l:τmax)
@@ -290,14 +389,17 @@ function main()
     visible_arc = generateRandomDataset()
     println("Number of antennas = " * string(length(visible_arc.antenna)))
     println("Number of satellites = " * string(length(visible_arc.satellite)))
+    # TODO
+    viz(visible_arc)
+    #viz(visible_arc, Vector{VisibleArc}())
+    readline()
+    return
     global candidates = feasibleCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
     println("Generated " * string(length(candidates)) * " candidate combinations.")
-    # TODO
-    # Visualize the visible arc here
     solution, fitness = saco(candidates, working_lengths)
     println(solution)
     # TODO
-    # Visualize the solution here
+    # viz(solution)
 end
 
 @time main()
