@@ -402,8 +402,25 @@ function viz(v::VisibleArc)
 end
 
 # Function to visualize the generated solution
-function viz(v::VisibleArc, s::Vector{VisibleArc})
-    scene = viz(v)
+function viz(s::Vector{VisibleArc})
+    antenna_pos = getAntennaPositions()
+    satellite_pos = getSatellitePositions()
+    ΔΤmax = τmax-τmin
+    directions = Vector{Point3f0}()
+    start_pos = Vector{Point3f0}()
+    for va in s
+        for antenna in va.antenna
+            # Go from [τmin,τmax] to [1,360]
+            # which is the range of the earth mesh slices
+            anti = ceil(Int, 359/ΔΤmax*((antenna.end_time+antenna.start_time)/2-τmin)+1)
+            for satellite in va.satellite
+                sati = ceil(Int, 359/ΔΤmax*((satellite.end_time+satellite.start_time)/2-τmin)+1)
+                push!(start_pos, antenna_pos[anti])
+                push!(directions, satellite_pos[sati])
+            end
+        end
+    end
+    arrows!(start_pos, directions, arrowsize=0, linecolor=:green)
 end
 
 # ------------------
@@ -416,14 +433,16 @@ function main()
     println("Number of antennas = " * string(length(visible_arc.antenna)))
     println("Number of satellites = " * string(length(visible_arc.satellite)))
     viz(visible_arc)
+    println("Press enter to continue...")
     readline()
-    return
     global candidates = feasibleCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
     println("Generated " * string(length(candidates)) * " candidate combinations.")
     solution, fitness = saco(candidates, working_lengths)
+    viz(solution)
     println(solution)
-    # TODO
-    # viz(solution)
+    println(length(solution))
+    println("Press enter to quit...")
+    readline()
 end
 
 @time main()
