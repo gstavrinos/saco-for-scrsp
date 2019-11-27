@@ -333,12 +333,25 @@ function placeSatellites!(scene, satellites, s)
     ΔΤmax = τmax-τmin
     nsats = length(satellites)
     satp = Vector{Point{3,Float32}}()
-    # TODO add length arrows
+    sat_colours = [RGBAf0(rand(), rand(), rand(), 1.0) for i = 1:nsats]
+    arrow_colours = []
+    for c in sat_colours
+        push!(arrow_colours, c)
+        push!(arrow_colours, c)
+    end
+    directions = Vector{Point3f0}()
+    start_pos = Vector{Point3f0}()
     for satellite in satellites
         p = ceil(Int, 359/ΔΤmax*((satellite.end_time+satellite.start_time)/2-τmin)+1)
         push!(satp, satellite_pos[p])
+        starti = ceil(Int, 359/ΔΤmax*(satellite.start_time-τmin)+1)
+        endi = ceil(Int, 359/ΔΤmax*(satellite.end_time-τmin)+1)
+        push!(directions, satellite_pos[p]-satellite_pos[starti])
+        push!(directions, satellite_pos[p]-satellite_pos[endi])
+        push!(start_pos, satellite_pos[p])
+        push!(start_pos, satellite_pos[p])
     end
-    sat_colours = [RGBAf0(rand(), rand(), rand(), 1.0) for i = 1:nsats]
+    arrows!(scene, start_pos, directions, arrowsize=0, linecolor=arrow_colours)
     sat_sizes = [(0.2,0.2,0.2) for i = 1:nsats]
     scene = meshscatter!(satp, color = sat_colours, markersize = sat_sizes, marker=s)
 end
@@ -402,9 +415,7 @@ function main()
     visible_arc = generateRandomDataset()
     println("Number of antennas = " * string(length(visible_arc.antenna)))
     println("Number of satellites = " * string(length(visible_arc.satellite)))
-    # TODO
     viz(visible_arc)
-    #viz(visible_arc, Vector{VisibleArc}())
     readline()
     return
     global candidates = feasibleCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
