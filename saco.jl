@@ -297,17 +297,31 @@ end
 # Helper function to add the antennas on the globe
 function placeAntennas!(scene, antennas, a)
     antenna_pos = getAntennaPositions()
+    satellite_pos = getSatellitePositions()
     ΔΤmax = τmax-τmin
     nantennas = length(antennas)
     antp = Vector{Point{3,Float32}}()
-    # TODO add length arrows
+    ant_colours = [RGBAf0(rand(), rand(), rand(), 1.0) for i = 1:nantennas]
+    arrow_colours = []
+    for c in ant_colours
+        push!(arrow_colours, c)
+        push!(arrow_colours, c)
+    end
+    directions = Vector{Point3f0}()
+    start_pos = Vector{Point3f0}()
     for antenna in antennas
         # Go from [τmin,τmax] to [1,360]
         # which is the range of the earth mesh slices
         p = ceil(Int, 359/ΔΤmax*((antenna.end_time+antenna.start_time)/2-τmin)+1)
         push!(antp, antenna_pos[p])
+        starti = ceil(Int, 359/ΔΤmax*(antenna.start_time-τmin)+1)
+        endi = ceil(Int, 359/ΔΤmax*(antenna.end_time-τmin)+1)
+        push!(directions, satellite_pos[starti])
+        push!(directions, satellite_pos[endi])
+        push!(start_pos, antenna_pos[p])
+        push!(start_pos, antenna_pos[p])
     end
-    ant_colours = [RGBAf0(rand(), rand(), rand(), 1.0) for i = 1:nantennas]
+    arrows!(scene, start_pos, directions, arrowsize=0, linecolor=arrow_colours)
     ant_sizes = [(0.01,0.01,0.01) for i = 1:nantennas]
     ant_rot = [Vec4f0([0,0,-0.7,0.7]) for i = 1:nantennas]
     scene = meshscatter!(antp, color = ant_colours, markersize = ant_sizes, marker=a, rotation=ant_rot)
@@ -323,7 +337,6 @@ function placeSatellites!(scene, satellites, s)
     for satellite in satellites
         p = ceil(Int, 359/ΔΤmax*((satellite.end_time+satellite.start_time)/2-τmin)+1)
         push!(satp, satellite_pos[p])
-        println(p)
     end
     sat_colours = [RGBAf0(rand(), rand(), rand(), 1.0) for i = 1:nsats]
     sat_sizes = [(0.2,0.2,0.2) for i = 1:nsats]
@@ -361,7 +374,7 @@ function myGodItsFullOfStars!(scene)
     stars = 100_000
     scatter!(scene, (rand(Point3f0, stars) .- 0.5) .* 10,
         glowwidth = 0.005, glow_color = :white, color = RGBA(0.8, 0.9, 0.95, 0.4),
-        markersize = rand(range(0.0001, stop=0.01, length=100), stars))
+        markersize = rand(range(0.0001, stop=0.005, length=100), stars))
 end
 
 # Function to visualize the generated problem
