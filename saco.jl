@@ -76,7 +76,7 @@ function canConnect(a::Antenna, s::Satellite)
 end
 
 function feasible(c, s, e)
-    return c.start_time < e && c.end_time > s
+    return c.start_time < e #&& c.end_time > s
 end
 
 function generateRandomDataset()
@@ -220,17 +220,19 @@ end
 
 function constructSolution!(ant, working_lengths, ants)
     end_times = working_lengths .+ (τmax/length(working_lengths) - stp)
-    probs = Vector{Float64}()
     ant.solution = Vector{VisibleArc}()
     for l=1:length(working_lengths)
+        probs = Vector{Float64}()
         for ai in ant.index_pool
             if feasible(candidates[ai], working_lengths[l], end_times[l])
                 pd = 0
                 for a in ants
-                    if a != ant
+                    if true#a != ant
+                        #println("diff, indeed")
                         for tmpai in a.index_pool
                             if feasible(candidates[tmpai], working_lengths[l], end_times[l])
                                 pd += a.pheromone_value*a.fitness^β
+                                #println(pd)
                             end
                         end
                     end
@@ -402,7 +404,7 @@ function viz(v::VisibleArc)
 end
 
 # Function to visualize the generated solution
-function viz(s::Vector{VisibleArc})
+function viz(scene::Scene, s::Vector{VisibleArc})
     antenna_pos = getAntennaPositions()
     satellite_pos = getSatellitePositions()
     ΔΤmax = τmax-τmin
@@ -420,7 +422,7 @@ function viz(s::Vector{VisibleArc})
             end
         end
     end
-    arrows!(start_pos, directions, arrowsize=0, linecolor=:green)
+    arrows!(scene, start_pos, directions, arrowsize=0, linecolor=:green)
 end
 
 # ------------------
@@ -432,13 +434,13 @@ function main()
     visible_arc = generateRandomDataset()
     println("Number of antennas = " * string(length(visible_arc.antenna)))
     println("Number of satellites = " * string(length(visible_arc.satellite)))
-    viz(visible_arc)
+    scene = viz(visible_arc)
     println("Press enter to continue...")
     readline()
     global candidates = feasibleCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
     println("Generated " * string(length(candidates)) * " candidate combinations.")
     solution, fitness = saco(candidates, working_lengths)
-    viz(solution)
+    viz(scene, solution)
     println(solution)
     println(length(solution))
     println("Press enter to quit...")
