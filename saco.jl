@@ -72,7 +72,7 @@ end
 
 function canConnect(a::Antenna, s::Satellite)
     return (s.start_time >= a.start_time && s.start_time <= a.end_time) ||
-            (s.end_time >= a.start_time && s.end_time >= a.end_time) ||
+            (s.end_time >= a.start_time && s.end_time <= a.end_time) ||
             (a.start_time <= s.start_time && a.end_time >= s.end_time) ||
             (a.start_time >= s.start_time && a.end_time <= s.end_time)
 end
@@ -121,8 +121,6 @@ end
 
 function validCombination(c)
     for a in c.antenna
-        # Check if this antenna is
-        # outside of this working period
         for sat in c.satellite
             if !canConnect(a, sat)
                 return false
@@ -318,8 +316,8 @@ function placeAntennas!(scene, antennas, a)
         push!(antp, antenna_pos[p])
         starti = ceil(Int, 359/ΔΤmax*(antenna.start_time-τmin)+1)
         endi = ceil(Int, 359/ΔΤmax*(antenna.end_time-τmin)+1)
-        push!(directions, satellite_pos[starti])
-        push!(directions, satellite_pos[endi])
+        push!(directions, satellite_pos[starti]-antenna_pos[p])
+        push!(directions, satellite_pos[endi]-antenna_pos[p])
         push!(start_pos, antenna_pos[p])
         push!(start_pos, antenna_pos[p])
     end
@@ -348,8 +346,8 @@ function placeSatellites!(scene, satellites, s)
         push!(satp, satellite_pos[p])
         starti = ceil(Int, 359/ΔΤmax*(satellite.start_time-τmin)+1)
         endi = ceil(Int, 359/ΔΤmax*(satellite.end_time-τmin)+1)
-        push!(directions, satellite_pos[p]-satellite_pos[starti])
-        push!(directions, satellite_pos[p]-satellite_pos[endi])
+        push!(directions, satellite_pos[starti]-satellite_pos[p])
+        push!(directions, satellite_pos[endi]-satellite_pos[p])
         push!(start_pos, satellite_pos[p])
         push!(start_pos, satellite_pos[p])
     end
@@ -418,7 +416,7 @@ function viz(scene::Scene, s::Vector{VisibleArc})
             for satellite in va.satellite
                 sati = ceil(Int, 359/ΔΤmax*((satellite.end_time+satellite.start_time)/2-τmin)+1)
                 push!(start_pos, antenna_pos[anti])
-                push!(directions, satellite_pos[sati])
+                push!(directions, satellite_pos[sati]-antenna_pos[anti])
             end
         end
     end
@@ -443,7 +441,7 @@ function main()
     global candidates = feasibleCombinations(visible_arc.antenna, visible_arc.satellite, working_lengths)
     println("Generated " * string(length(candidates)) * " candidate combinations.")
     solution, fitness = saco(candidates, working_lengths)
-    println(solution)
+    #println(solution)
     viz(scene, solution)
     println("Press enter to quit...")
     readline()
