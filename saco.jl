@@ -19,7 +19,7 @@ using GeometryTypes
 
 # SACO contants based on
 # the results of the paper
-m = 40
+nants = 20
 ρ = .04
 β = 2
 ω = .1
@@ -28,7 +28,6 @@ m = 40
 stp = .001
 τmax = .999
 Nmax = 500
-nants = 20
 
 mutable struct VisibleArc
     satellite       # sa
@@ -140,7 +139,7 @@ function fixCombination!(v, working_lengths)
         if a.start_time < mins
             mins = a.start_time
         end
-        if a.end_time < maxe
+        if a.end_time > maxe
             maxe = a.end_time
         end
     end
@@ -148,7 +147,7 @@ function fixCombination!(v, working_lengths)
         if s.start_time < mins
             mins = s.start_time
         end
-        if s.end_time < maxe
+        if s.end_time > maxe
             maxe = s.end_time
         end
     end
@@ -245,7 +244,11 @@ function constructSolution!(ant, working_lengths, ants)
                 push!(probs, .0)
             end
         end
-        push!(ant.solution, candidates[sample(ant.index_pool, Weights(probs))])
+        if sum(probs) == 0
+            push!(ant.solution, candidates[sample(ant.index_pool)])
+        else
+            push!(ant.solution, candidates[sample(ant.index_pool, Weights(probs))])
+        end
         delete_indices = []
         # for a in ant.solution[end].antenna
         #     for i=1:length(ant.index_pool)
@@ -272,8 +275,6 @@ function saco(candidates, working_lengths)
     @showprogress 0.1  "Running the SACO algorithm..." for iteration=1:Nmax
         # Paper step 3
         for i = 1:length(ants)
-            println(i)
-            println(hash(ants[i].solution))
             # Paper step 4
             constructSolution!(ants[i], working_lengths, ants)
             # Paper step 7
